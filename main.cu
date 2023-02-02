@@ -132,110 +132,6 @@ void readMTX
 
 }
 
-void compute_d4(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double *d4){
-
-    double *fl = (double *) calloc(n, sizeof(double));
-    int *pos = (int *) calloc(n, sizeof(int));
-    int *isNgbh = (int *) calloc(n, sizeof(int));
-    mwIndex *isUsed = (mwIndex *) calloc(n, sizeof(mwIndex));
-
-    for(int i=0;i<n;i++){
-    // setup the count of nonzero columns (j) visited for this row (i)
-        mwIndex cnt = 0;
-
-        // --- loop through every nonzero element A(i,k)
-        for (mwIndex id_i = col[i]; id_i < col[i+1]; id_i++){
-
-            // get the column (k)
-            mwIndex k = row[id_i];
-
-            isNgbh[k] = id_i+1;
-            
-            // --- loop through all nonzero elemnts A(k,j)
-            for (mwIndex id_k = col[k]; id_k < col[k+1]; id_k++){
-
-                // get the column (j)
-                mwIndex j = row[id_k];
-
-                if (i == j) continue;
-
-                // if this column is not visited yet for this row (i), then set it
-                if (!isUsed[j]) {
-                    fl[j]      = 0;  // initialize corresponding element
-                    isUsed[j]  = 1;  // set column as visited
-                    pos[cnt++] = j;  // add column position to list of visited
-                }
-
-                // increase count of A(i,j)
-                fl[j]++;
-                
-            }
-
-        }
-
-        // --- perform reduction on [cnt] non-empty columns (j) 
-        for (mwIndex l=0; l<cnt; l++) {
-
-            // get next column number (j)
-            mwIndex j = pos[l];
-
-            if (isNgbh[j]) {
-                    
-                d4[i]  += fl[j];
-            }
-            
-            // declare it non-used
-            isUsed[j] = 0;
-        }
-
-        d4[i]  /= 2;
-
-        for (mwIndex id_i = col[i]; id_i < col[i+1]; id_i++){
-
-          // get the column (k)
-          mwIndex k = row[id_i];
-
-          isNgbh[k] = 0;
-        }
-
-    }
-}
-
-void computeRaw(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double **d){
-  //d0, d1
-  for(mwSize i=0;i<n;i++){
-    d[0][i] = 1;
-    d[1][i] = col[i+1] - col[i];
-    d[3][i] = d[1][i] * (d[1][i] - 1) * 0.5;
-  }
-
-  //d2, d3
-  for(mwSize i=0;i<n;i++){
-    for(mwIndex id_i = col[i]; id_i < col[i+1]; id_i++){
-
-      // get the column (k)
-      mwIndex k = row[id_i];
-        
-      // --- matrix-vector products
-      d[2][i] += d[1][k];
-    }
-
-    d[2][i] -= d[1][i];
-  }
-
-  compute_d4(row, col, n, m, d[4]);
-
-  FILE* f;
-
-  f = fopen("raw_results.txt", "w");
-  for(mwSize i=0;i<n;i++){
-    d[2][i] = d[2][i] -  2 * d[4][i];
-    d[3][i] -= d[4][i];
-    fprintf(f, "%.1f %.1f %.1f %.1f, %.1f\n", d[0][i], d[1][i], d[2][i], d[3][i], d[4][i]);
-  }
-
-  fclose(f);
-}
 
 #define BLOCK_SIZE 512
 
@@ -249,6 +145,7 @@ __global__ void compute_d0_d1_d3_Kernel(mwIndex *col, double *d0, double *d1, do
   }
 }
 
+//matrix-vector multiplication
 __global__ void compute_d2_Kernel(mwIndex *row, mwIndex *col, double *d1, double *d2, mwSize n){
   int i = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -266,45 +163,41 @@ __global__ void compute_d2_Kernel(mwIndex *row, mwIndex *col, double *d1, double
   }
 }
 
-// __global__ void sparseMatrixSquareKernel(const int *row, const int *col, const float *valA, float *valC, int *colC, int *rowC, int N) {
-//   int i = blockIdx.x * blockDim.x + threadIdx.x;
+__device__ double warp_reduce(double sum){
+  unsigned FULL_WARP_MASK = 0xffffffff;
 
-//   if (i < N) {
-//     int rowStart = col[i];
-//     int rowEnd = col[i + 1];
+  for(int offset = warpSize / 2; offset > 0; offset /= 2){
+    sum += __shfl_down_sync(FULL_WARP_MASK, sum, offset);
+  }
+  return sum;
+}
 
-//     int nnzC = 0;
-//     for (int i = rowStart; i < rowEnd; ++i) {
-//       int colA_i = row[i];
-//       float valA_i = valA[i];
+__global__ void compute_d2_vector_Kernel(mwIndex *row, mwIndex *col, double *d1, double *d2, mwSize n){
+  int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+  int warpId = threadId / 32;
+  int lane = threadId % 32;
 
-//       int colStart = col[colA_i];
-//       int colEnd = col[colA_i + 1];
+  //the column (one warp per column)
+  mwIndex j = warpId;
 
-//       for (int j = colStart; j < colEnd; ++j) {
-//         int colA_j = row[j];
-//         float valA_j = valA[j];
+  double sum = 0;
+  if(j < n){
+    
+    for(mwIndex id_i = col[j] + lane; id_i < col[j+1]; id_i += 32){
 
-//         int colStart2 = col[colA_j];
-//         int colEnd2 = col[colA_j + 1];
+      // get the column (k)
+      mwIndex k = row[id_i];
+        
+      // --- matrix-vector products
+      sum += d1[k];
+    }
+  }
 
-//         for (int k = colStart2; k < colEnd2; ++k) {
-//           int colA_k = row[k];
+  sum = warp_reduce(sum);
 
-//           if (colA_k == i) {
-//             float val = valA_i * valA_j;
-//             if (val != 0.0f) {
-//               valC[nnzC] = val;
-//               rowC[nnzC] = colA_j;
-//               ++nnzC;
-//             }
-//           }
-//         }
-//       }
-//       colC[i + 1] = nnzC;
-//     }
-//   }
-// }
+  if(lane == 0 && j < n)
+    d2[j] = sum - d1[j];
+}
 
 __global__ void square_csc_sparse_matrix(mwSize n, mwSize m, mwIndex *A_row_idx, mwIndex *A_col_ptr, unsigned int *result_row_idx, unsigned int *result_col_ptr) {
   
@@ -378,6 +271,10 @@ void cudaComputeRaw(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double **d){
 
   cudaMemcpy(rowD, row, m * sizeof(double), cudaMemcpyHostToDevice);
 
+  //------------if d2 vector kernel
+  dim3 dimBlock2(BLOCK_SIZE); //thread per block
+  dim3 dimGrid2(n); //num of blocks (and warps)
+  //----------------------
   compute_d2_Kernel<<<dimGrid, dimBlock>>>(rowD, colD, d1D, d2D, n);
 
   cudaMemcpy(d2, d2D, n * sizeof(double), cudaMemcpyDeviceToHost);
@@ -456,10 +353,10 @@ void cudaComputeRaw(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double **d){
 
   // cudaMemcpy(d2, d2D, n * sizeof(double), cudaMemcpyDeviceToHost);
 
-  // cudaFree(d1D);
-  // cudaFree(d2D);
-  // cudaFree(colD);
-  // cudaFree(rowD);
+  cudaFree(d1D);
+  cudaFree(d2D);
+  cudaFree(colD);
+  cudaFree(rowD);
 
   //--------------------------------------------
 
@@ -517,13 +414,6 @@ int main(int argc, char **argv)
 
   struct timeval startwtime, endwtime;
   double duration;
-
-  gettimeofday (&startwtime, NULL);
-  computeRaw(row, col, n, m, d);
-  gettimeofday (&endwtime, NULL);
-  duration = (double)((endwtime.tv_usec - startwtime.tv_usec)/1.0e6 + endwtime.tv_sec - startwtime.tv_sec);
-  printf("[computeRaw took %.4f seconds]\n", duration);
-  
 
   gettimeofday (&startwtime, NULL);
   cudaComputeRaw(row, col, n, m, d);
