@@ -206,34 +206,35 @@ void compute_d4(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double *d4){
 }
 
 void compute_square(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double* d4){
-  int ip = 0;
+  mwIndex ip = 0;
 
   //maybe 2 * m
   mwIndex *rowRes = (mwIndex*) malloc(m * sizeof(mwIndex));
-  mwIndex *colRes = (mwIndex*) calloc(n, sizeof(mwIndex));
+  //mwIndex *colRes = (mwIndex*) calloc(n, sizeof(mwIndex));
+  mwIndex colPoint = 0;
 
   int *xb = (int*) malloc(n * sizeof(int));
-  for(int i = 0; i < n; i++){
+  for(mwIndex i = 0; i < n; i++){
     xb[i] = -1;
   }
-  int *x = (int*) malloc(n * sizeof(int));
+  mwIndex *x = (mwIndex*) malloc(n * sizeof(mwIndex));
 
   //for each column (i)
-  for(int i = 0; i < n; i++){
-    colRes[i] = ip;
+  for(mwIndex i = 0; i < n; i++){
+    colPoint = ip;
 
     //for each row (j) that column (i) has an element
-    for(int jp = col[i]; jp < col[i+1];jp++){
-      int j = row[jp];
+    for(mwIndex jp = col[i]; jp < col[i+1];jp++){
+      mwIndex j = row[jp];
 
       //for each row (k) that column (j) has an element
-      for(int kp = col[j]; kp < col[j+1]; kp++){
-        int k = row[kp];
+      for(mwIndex kp = col[j]; kp < col[j+1]; kp++){
+        mwIndex k = row[kp];
         // printf("k = %d\n", k);
 
         bool compute = false;
-        for(int fp = col[i]; fp < col[i+1]; fp++){
-          int f = row[fp];
+        for(mwIndex fp = col[i]; fp < col[i+1]; fp++){
+          mwIndex f = row[fp];
           if(f == k){
             compute = true;
             break;
@@ -256,8 +257,8 @@ void compute_square(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double* d4){
       }
     }
 
-    for(int vp = colRes[i]; vp < ip; vp++){
-      int v = rowRes[vp];
+    for(mwIndex vp = colPoint; vp < ip; vp++){
+      mwIndex v = rowRes[vp];
 
       d4[i] += x[v];
     }
@@ -265,10 +266,9 @@ void compute_square(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double* d4){
     d4[i] /= 2;
   }
 
-  // for(int i = 0; i < n; i++){
-  //     printf("%f ", d[i]);
-  // }
-  // printf("\n");
+  free(x);
+  free(xb);
+  free(rowRes);
 }
 
 void computeRaw(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double **d){
@@ -293,7 +293,7 @@ void computeRaw(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double **d){
     d[2][i] -= d[1][i];
   }
 
-  compute_d4(row, col, n, m, d[4]);
+  compute_square(row, col, n, m, d[4]);
 
   FILE* f;
 
@@ -354,7 +354,7 @@ int main(int argc, char **argv){
     free(d[igraph]);
   }
   free(d);
-  free( row );
-  free( col );
+  free(row);
+  free(col);
   
 }
