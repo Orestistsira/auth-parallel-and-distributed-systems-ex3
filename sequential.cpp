@@ -232,6 +232,7 @@ void compute_square(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double* d4){
         mwIndex k = row[kp];
         // printf("k = %d\n", k);
 
+        //compute only if the value in starting matrix is 1
         bool compute = false;
         for(mwIndex fp = col[i]; fp < col[i+1]; fp++){
           mwIndex f = row[fp];
@@ -271,6 +272,40 @@ void compute_square(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double* d4){
   free(rowRes);
 }
 
+void compute_c3(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double* d4){
+  int j, jp, k, l, x;
+
+  //for each column (i)
+  for(int i = 0; i < n; i++){
+
+    //for each row (j) that column (i) has an element
+    for(jp = col[i]; jp < col[i+1]; jp++){
+      j = row[jp];
+      x = col[i];
+
+      for(k = col[j]; k < col[j + 1]; k++){
+        for(l = x; l < col[i+1]; l++){
+
+          if(row[k] < row[l]){
+            x = l;
+            break;
+          }
+          else if(row[k] == row[l]){
+            d4[i]++;
+            x = l + 1;
+            break;
+          }
+          else{
+            x = l + 1;
+          }
+        }
+      }
+    }
+
+    d4[i] /= 2;
+  }
+}
+
 void computeRaw(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double **d){
   //d0, d1
   for(mwSize i=0;i<n;i++){
@@ -293,7 +328,7 @@ void computeRaw(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double **d){
     d[2][i] -= d[1][i];
   }
 
-  compute_square(row, col, n, m, d[4]);
+  compute_d4(row, col, n, m, d[4]);
 
   FILE* f;
 

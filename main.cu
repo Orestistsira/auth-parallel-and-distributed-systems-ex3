@@ -221,11 +221,38 @@ __global__ void square_csc_sparse_matrix(mwSize n, mwSize m, mwIndex *A_row_idx,
   }
 }
 
-__global__ void compute_d4_Kernel(unsigned int *col, double *d4, mwSize n){
+__global__ void compute_c3_Kernel(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double* d4){
   int i = blockIdx.x * blockDim.x + threadIdx.x;
 
+  int j, jp, k, l, x;
+
+  //for each column (i)
   if(i < n){
-    d4[i] = col[i+1] - col[i];
+    //for each row (j) that column (i) has an element
+    for(jp = col[i]; jp < col[i+1]; jp++){
+      j = row[jp];
+      x = col[i];
+
+      for(k = col[j]; k < col[j + 1]; k++){
+        for(l = x; l < col[i+1]; l++){
+
+          if(row[k] < row[l]){
+            x = l;
+            break;
+          }
+          else if(row[k] == row[l]){
+            d4[i]++;
+            x = l + 1;
+            break;
+          }
+          else{
+            x = l + 1;
+          }
+        }
+      }
+    }
+
+    d4[i] /= 2;
   }
 }
 
@@ -278,83 +305,17 @@ void cudaComputeRaw(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double **d){
   compute_d2_Kernel<<<dimGrid, dimBlock>>>(rowD, colD, d1D, d2D, n);
 
   cudaMemcpy(d2, d2D, n * sizeof(double), cudaMemcpyDeviceToHost);
-  
-  //cudaDeviceSynchronize();
 
   //d4
-  // unsigned int *resRow, *resCol;
+  cudaMalloc((void**)&d4D, n * sizeof(double));
 
-  // cudaMalloc((void**)&resCol, (n+1) * sizeof(unsigned int));
-  // cudaMalloc((void**)&resRow, m * sizeof(unsigned int));
-  // cudaMemset(resCol, 0, (n+1) * sizeof(unsigned int));
-  // cudaMemset(resRow, 0, m * sizeof(unsigned int));
+  compute_c3_Kernel<<<dimGrid, dimBlock>>>(rowD, colD, n, m, d4D);
 
-  // cudaMalloc((void**)&d4D, n * sizeof(double));
-  
-  // dim3 dimBlock2(BLOCK_SIZE); //thread per block
-  // dim3 dimGrid2((m + BLOCK_SIZE - 1) / BLOCK_SIZE); //num of blocks
-  // square_csc_sparse_matrix<<<dimGrid2, dimBlock2>>>(n, m, rowD, colD, resRow, resCol);
-
-  // compute_d4_Kernel<<<dimGrid, dimBlock>>>(resCol, d4D, n);
-
-  // cudaMemcpy(d4, d4D, n * sizeof(double), cudaMemcpyDeviceToHost);
-
-  // cudaFree(d1D);
-  // cudaFree(d2D);
-  // cudaFree(d4D);
-  // cudaFree(colD);
-  // cudaFree(rowD);
-  // cudaFree(resCol);
-  // cudaFree(resRow);
-
-  //d2 cuSparse--------------------------------------------
-  
-  // mwIndex *rowD;
-  // double *valuesD;
-  // double *values = (double*) malloc(m * sizeof(double));
-  // for(int i=0;i<m;i++){
-  //   values[i] = 1;
-  // }
-
-  // cudaMalloc((void**)&rowD, m * sizeof(mwIndex));
-  // cudaMalloc((void**)&valuesD, m * sizeof(double));
-  // cudaMemcpy(rowD, row, m * sizeof(mwIndex), cudaMemcpyHostToDevice);
-  // cudaMemcpy(valuesD, values, m * sizeof(double), cudaMemcpyHostToDevice);
-
-  // cudaMalloc((void**)&d2D, n * sizeof(double));
-  // cudaMemcpy(d2D, d1D, n * sizeof(double), cudaMemcpyDeviceToDevice);
-
-
-  // double     alpha           = 1.0;
-  // double     beta            = -1.0;
-
-  // cusparseHandle_t     handle = NULL;
-  // cusparseSpMatDescr_t matA;
-  // cusparseDnVecDescr_t vecX, vecY;
-  // void*                dBuffer    = NULL;
-  // size_t               bufferSize = 0;
-
-  // cusparseCreate(&handle);
-
-  // cusparseCreateCsc(&matA, n, n, m, colD, rowD, valuesD, CUSPARSE_INDEX_64I, CUSPARSE_INDEX_64I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_64F);
-
-  // cusparseCreateDnVec(&vecX, n, d1D, CUDA_R_64F);
-  // cusparseCreateDnVec(&vecY, n, d2D, CUDA_R_64F);
-
-  // cusparseSpMV_bufferSize(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, matA, vecX, &beta, vecY, CUDA_R_64F, CUSPARSE_SPMV_ALG_DEFAULT, &bufferSize);
-  // cudaMalloc(&dBuffer, bufferSize);
-
-  // cusparseSpMV(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, matA, vecX, &beta, vecY, CUDA_R_64F, CUSPARSE_SPMV_ALG_DEFAULT, dBuffer);
-
-  // cusparseDestroySpMat(matA);
-  // cusparseDestroyDnVec(vecX);
-  // cusparseDestroyDnVec(vecY);
-  // cusparseDestroy(handle);
-
-  // cudaMemcpy(d2, d2D, n * sizeof(double), cudaMemcpyDeviceToHost);
+  cudaMemcpy(d4, d4D, n * sizeof(double), cudaMemcpyDeviceToHost);
 
   cudaFree(d1D);
   cudaFree(d2D);
+  cudaFree(d4D);
   cudaFree(colD);
   cudaFree(rowD);
 
@@ -364,6 +325,8 @@ void cudaComputeRaw(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double **d){
   f = fopen("raw_results_cuda.txt", "w");
 
   for(mwSize i = 0; i < n; i++){
+    d[2][i] = d[2][i] -  2 * d[4][i];
+    d[3][i] -= d[4][i];
     fprintf(f, "%.1f %.1f %.1f %.1f %.1f\n", d0[i], d1[i], d2[i], d3[i], d4[i]);
   }
   fclose(f);
