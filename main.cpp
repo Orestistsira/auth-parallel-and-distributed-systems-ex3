@@ -40,6 +40,50 @@
 //     free(row_count);
 // }
 
+void compute_c3(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double* d4){
+  int j, jp, k, l, x;
+
+  //for each column (i)
+  for(int i = 0; i < n; i++){
+    printf("i = %d:\n", i);
+    //for each row (j) that column (i) has an element
+    for(jp = col[i]; jp < col[i+1]; jp++){
+      j = row[jp];
+      printf("\nj = %d\n\n", j);
+      x = col[i];
+      printf("x = %d\n", x);
+
+      for(k = col[j]; k < col[j + 1]; k++){
+        printf("k = %d\n", k);
+        for(l = x; l < col[i+1]; l++){
+          printf("l = %d\n", l);
+
+          if(row[k] < row[l]){
+            x = l;
+            printf("d4[i] = %f\n", d4[i]);
+            break;
+          }
+          else if(row[k] == row[l]){
+            d4[i]++;
+            x = l + 1;
+            printf("d4[i] = %f\n", d4[i]);
+            break;
+          }
+          else{
+            x = l + 1;
+          }
+
+          printf("d4[i] = %f\n", d4[i]);
+        }
+      }
+    }
+
+    d4[i] /= 2;
+    printf("\n");
+  }
+  printf("\n");
+}
+
 //for csr (csc only for symmetric matrices)
 void compute_square(mwIndex *row, mwIndex *col, mwSize n, mwSize m, mwIndex *rowRes, mwIndex *colRes, double *valRes){
     int ip = 0;
@@ -140,9 +184,7 @@ int main(int argc, char** argv){
     mwIndex *colRes = (mwIndex*) calloc((n+1), sizeof(mwIndex));
     double *valRes = (double*) malloc(2 * m * sizeof(double));
 
-    printf("here\n");
-
-    compute_square(row, col, n, m, rowRes, colRes, valRes);
+    compute_c3(row, col, n, m, valRes);
 
     int mRes = colRes[n];
 
