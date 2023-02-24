@@ -2,3 +2,8 @@ a.out
 cudaOut
 raw_results.txt
 raw_results_cuda.txt
+fglt_seq.out
+tester.out
+fglt_cuda.out
+/graphs/delaunay_n22.mtx
+/graphs/great-britain_osm.mtx
