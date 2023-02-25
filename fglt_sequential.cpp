@@ -1,5 +1,6 @@
 #include "utils.hpp"
 
+//Original implementation of c3
 void compute_d4(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double *d4){
 
   double *fl = (double *) calloc(n, sizeof(double));
@@ -74,7 +75,7 @@ void compute_d4(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double *d4){
   free(isUsed);
 }
 
-void compute_square(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double* d4){
+void compute_d4_2(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double* d4){
   mwIndex ip = 0;
 
   //maybe 2 * m
@@ -175,15 +176,16 @@ void compute_c3(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double* d4){
   }
 }
 
+//Compute graphlets d0-d4
 void computeRaw(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double **d){
-  //d0, d1
+  //d0, d1, d3
   for(mwSize i=0;i<n;i++){
     d[0][i] = 1;
     d[1][i] = col[i+1] - col[i];
     d[3][i] = d[1][i] * (d[1][i] - 1) * 0.5;
   }
 
-  //d2, d3
+  //d2
   for(mwSize i=0;i<n;i++){
     for(mwIndex id_i = col[i]; id_i < col[i+1]; id_i++){
 

@@ -7,3 +7,7 @@ tester.out
 fglt_cuda.out
 /graphs/delaunay_n22.mtx
 /graphs/great-britain_osm.mtx
+/graphs/roadNet-CA.mtx
+/graphs/road_usa.mtx
+/graphs/hugebubbles-00010.mtx
+/graphs/hugebubbles-00020.mtx

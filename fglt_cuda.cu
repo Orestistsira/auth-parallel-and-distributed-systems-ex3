@@ -170,6 +170,7 @@ void cudaComputeRaw(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double **d){
   dim3 dimGrid2(n); //num of blocks (and warps)
   //----------------------
   compute_d2_Kernel<<<dimGrid, dimBlock>>>(rowD, colD, d1D, d2D, n);
+  //compute_d2_vector_Kernel<<<dimGrid2, dimBlock2>>>(rowD, colD, d1D, d2D, n);
 
   cudaMemcpy(d2, d2D, n * sizeof(double), cudaMemcpyDeviceToHost);
 
