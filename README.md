@@ -14,7 +14,7 @@ CUDA Version: 12.0
 
 make seq
 
-./fglt_seq.out <filepath>
+./fglt_seq.out <grpah-filepath>
 
 ```
 
@@ -24,11 +24,11 @@ make seq
 
 make cuda
 
-./fglt_cuda.out <filepath>
+./fglt_cuda.out <graph-filepath>
 
 ```
 
-- To compare the two result files:
+- To compare the two result files (Make sure to run the same graph file for the above):
 
 ```
 
