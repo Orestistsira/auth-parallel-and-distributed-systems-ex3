@@ -17,3 +17,23 @@ make seq
 ./fglt_seq.out <filepath>
 
 ```
+
+- To CUDA parallel code:
+
+```
+
+make cuda
+
+./fglt_cuda.out <filepath>
+
+```
+
+- To compare the two result files:
+
+```
+
+make tester
+
+./tester.out
+
+```
