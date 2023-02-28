@@ -1,5 +1,13 @@
 #include "utils.hpp"
 
+#define CHECK_CUDA(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true){
+  if (code != cudaSuccess){
+    fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+    if (abort) exit(code);
+  }
+}
+
 #define BLOCK_SIZE 512
 
 __global__ void compute_d0_d1_d3_Kernel(mwIndex *col, double *d0, double *d1, double *d3, mwSize n){
@@ -66,28 +74,6 @@ __global__ void compute_d2_vector_Kernel(mwIndex *row, mwIndex *col, double *d1,
     d2[j] = sum - d1[j];
 }
 
-__global__ void square_csc_sparse_matrix(mwSize n, mwSize m, mwIndex *A_row_idx, mwIndex *A_col_ptr, unsigned int *result_row_idx, unsigned int *result_col_ptr) {
-  
-  int tid = blockDim.x * blockIdx.x + threadIdx.x;
-  
-  if (tid < m) {
-    int row = A_row_idx[tid];
-    //int col = A_col_ptr[row];
-
-    for (int i = A_col_ptr[row]; i < A_col_ptr[row + 1]; i++) {
-      int j = A_row_idx[i];
-      int new_col = result_col_ptr[j];
-
-      for (int k = A_col_ptr[j]; k < A_col_ptr[j + 1]; k++) {
-        int l = A_row_idx[k];
-        if (l == row) {
-          result_row_idx[new_col + atomicAdd(&result_col_ptr[j + 1], 1) - 1] = row;
-        }
-      }
-    }
-  }
-}
-
 __global__ void compute_c3_Kernel(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double* d4){
   int i = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -137,55 +123,55 @@ void cudaComputeRaw(mwIndex *row, mwIndex *col, mwSize n, mwSize m, double **d){
 
   //d0, d1, d3------------------------------------
 
-  cudaMalloc((void**)&d0D, n * sizeof(double));
-  cudaMalloc((void**)&d1D, n * sizeof(double));
-  cudaMalloc((void**)&d3D, n * sizeof(double));
+  CHECK_CUDA( cudaMalloc((void**)&d0D, n * sizeof(double)) );
+  CHECK_CUDA( cudaMalloc((void**)&d1D, n * sizeof(double)) );
+  CHECK_CUDA( cudaMalloc((void**)&d3D, n * sizeof(double)) );
 
   mwIndex *colD;
-  cudaMalloc((void**)&colD, (n+1) * sizeof(mwIndex));
-  cudaMemcpy(colD, col, (n+1) * sizeof(mwIndex), cudaMemcpyHostToDevice);
+  CHECK_CUDA( cudaMalloc((void**)&colD, (n+1) * sizeof(mwIndex)) );
+  CHECK_CUDA( cudaMemcpy(colD, col, (n+1) * sizeof(mwIndex), cudaMemcpyHostToDevice) );
 
   dim3 dimBlock(BLOCK_SIZE); //thread per block
   dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE); //num of blocks
   compute_d0_d1_d3_Kernel<<<dimGrid, dimBlock>>>(colD, d0D, d1D, d3D, n);
 
-  cudaMemcpy(d0, d0D, n * sizeof(double), cudaMemcpyDeviceToHost);
-  cudaMemcpy(d1, d1D, n * sizeof(double), cudaMemcpyDeviceToHost);
-  cudaMemcpy(d3, d3D, n * sizeof(double), cudaMemcpyDeviceToHost);
+  CHECK_CUDA( cudaMemcpy(d0, d0D, n * sizeof(double), cudaMemcpyDeviceToHost) );
+  CHECK_CUDA( cudaMemcpy(d1, d1D, n * sizeof(double), cudaMemcpyDeviceToHost) );
+  CHECK_CUDA( cudaMemcpy(d3, d3D, n * sizeof(double), cudaMemcpyDeviceToHost) );
 
-  cudaFree(d0D);
-  cudaFree(d3D);
+  CHECK_CUDA( cudaFree(d0D) );
+  CHECK_CUDA( cudaFree(d3D) );
 
   //d2------------------------------------
 
-  cudaMalloc((void**)&d2D, n * sizeof(double));
+  CHECK_CUDA( cudaMalloc((void**)&d2D, n * sizeof(double)) );
   
   mwIndex *rowD;
-  cudaMalloc((void**)&rowD, m * sizeof(double));
+  CHECK_CUDA( cudaMalloc((void**)&rowD, m * sizeof(double)) );
 
-  cudaMemcpy(rowD, row, m * sizeof(double), cudaMemcpyHostToDevice);
+  CHECK_CUDA( cudaMemcpy(rowD, row, m * sizeof(double), cudaMemcpyHostToDevice) );
 
   //------------if d2 vector kernel
-  dim3 dimBlock2(BLOCK_SIZE); //thread per block
-  dim3 dimGrid2(n); //num of blocks (and warps)
+  // dim3 dimBlock2(BLOCK_SIZE); //thread per block
+  // dim3 dimGrid2(n); //num of blocks (and warps)
   //----------------------
   compute_d2_Kernel<<<dimGrid, dimBlock>>>(rowD, colD, d1D, d2D, n);
   //compute_d2_vector_Kernel<<<dimGrid2, dimBlock2>>>(rowD, colD, d1D, d2D, n);
 
-  cudaMemcpy(d2, d2D, n * sizeof(double), cudaMemcpyDeviceToHost);
+  CHECK_CUDA( cudaMemcpy(d2, d2D, n * sizeof(double), cudaMemcpyDeviceToHost) );
 
   //d4
-  cudaMalloc((void**)&d4D, n * sizeof(double));
+  CHECK_CUDA( cudaMalloc((void**)&d4D, n * sizeof(double)) );
 
   compute_c3_Kernel<<<dimGrid, dimBlock>>>(rowD, colD, n, m, d4D);
 
-  cudaMemcpy(d4, d4D, n * sizeof(double), cudaMemcpyDeviceToHost);
+  CHECK_CUDA( cudaMemcpy(d4, d4D, n * sizeof(double), cudaMemcpyDeviceToHost) );
 
-  cudaFree(d1D);
-  cudaFree(d2D);
-  cudaFree(d4D);
-  cudaFree(colD);
-  cudaFree(rowD);
+  CHECK_CUDA( cudaFree(d1D) );
+  CHECK_CUDA( cudaFree(d2D) );
+  CHECK_CUDA( cudaFree(d4D) );
+  CHECK_CUDA( cudaFree(colD) );
+  CHECK_CUDA( cudaFree(rowD) );
 }
 
 int main(int argc, char **argv)
